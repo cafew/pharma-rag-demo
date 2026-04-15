@@ -2,6 +2,14 @@
 
 一个面向医药呼叫中心场景的 Streamlit MVP。
 
+## V3 Change Summary
+
+- 保持原有 RAG 检索与 PDF 预览流程不变
+- 改进日文自然问句的高亮词拆分，例如 `被害救済制度は副作用を含めているか`
+- 右侧 PDF 优先按用户问题高亮，只有完全找不到时才回退到检索结果文本
+- 左侧结果列表显示更直观的相似度百分比和进度条
+- 为关键高亮逻辑补充了英文注释，便于后续维护
+
 场景说明：
 
 - 药局来电咨询某个药品问题
@@ -91,6 +99,51 @@ streamlit run app.py
 - 左侧输入药局问题并点击 `検索`
 - 选择任一检索结果
 - 右侧会跳转到对应 PDF 页面并显示红框高亮
+
+## How To Run V3
+
+1. 进入项目目录并激活虚拟环境
+
+```bash
+cd /Users/ki/01.work/10.Project/pharma-rag-demo
+source .venv/bin/activate
+```
+
+2. 如果是首次运行，先建库
+
+```bash
+python ingest.py
+```
+
+3. 启动 Streamlit
+
+```bash
+streamlit run app.py
+```
+
+## How To Test V3
+
+推荐先做下面这组手工验证：
+
+1. 在左侧输入：
+
+```text
+被害救済制度は副作用を含めているか
+```
+
+2. 点击 `検索`
+3. 选择第一页结果
+4. 确认右侧 PDF 页面上会出现多个红框，至少能覆盖 `被害救済制度` 和 `副作用` 相关文本
+5. 确认左侧每条结果都有：
+   - 页码
+   - `類似度: xx.x%`
+   - 相似度进度条
+
+也可以用下面的轻量命令验证 V3 的高亮词拆分：
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -c "from pathlib import Path; from pdf_utils import build_search_terms, render_annotated_page; q='被害救済制度は副作用を含めているか'; print(build_search_terms(question=q, selected_text='')); print(render_annotated_page(Path('data/manual.pdf'), 8, question=q, selected_text='')[2])"
+```
 
 ## 说明
 
