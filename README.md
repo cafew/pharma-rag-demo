@@ -37,7 +37,7 @@ pharma-rag-demo/
 1. 进入项目目录
 
 ```bash
-cd /Users/ki/01.work/10.Project/pharma-rag-demo
+cd  ./pharma-rag-demo
 ```
 
 2. 创建并激活虚拟环境
