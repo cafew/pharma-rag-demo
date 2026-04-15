@@ -84,9 +84,12 @@ def main() -> None:
         st.subheader("検索結果")
         if st.session_state.search_results:
             for index, result in enumerate(st.session_state.search_results, start=1):
+                similarity = max(0.0, min(1.0, float(result["score"])))
+                similarity_percent = similarity * 100
                 with st.container(border=True):
                     st.markdown(f"**{index}. ページ {result['page_number']}**")
-                    st.caption(f"スコア: {result['score']:.3f}")
+                    st.caption(f"類似度: {similarity_percent:.1f}%")
+                    st.progress(int(round(similarity_percent)))
                     st.write(result["snippet"])
 
                     if st.button(

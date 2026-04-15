@@ -9,8 +9,8 @@ Please inspect the current repo first and summarize:
 5) where page rendering / red-box annotation happens
 
 Then fix this issue with minimal changes only:
-    比如检索副作用，现场红色框表示的地方，还有URL链接，不想关的部分等
-    另外，检索结果的列表里面，能否给出类似度等，目前就是列表，不知道哪个最相关等
+    被害救済制度は副作用を含めているか这个问题，画面左边有结果，但是右边没有显示
+    能否显示相关的内容，全部用红框表示出来啊
     
 After the fix:
 - run the relevant command

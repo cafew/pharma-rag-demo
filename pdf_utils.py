@@ -13,6 +13,24 @@ def normalize_phrase(text: str) -> str:
     return text.strip()
 
 
+def is_noise_term(term: str) -> bool:
+    """Skip terms that are likely to create noisy highlights."""
+    normalized = normalize_phrase(term).lower()
+    if not normalized:
+        return True
+
+    if any(marker in normalized for marker in ("http://", "https://", "www.")):
+        return True
+
+    if "/" in normalized and re.search(r"[a-z]", normalized):
+        return True
+
+    if re.fullmatch(r"[\W_]+", normalized):
+        return True
+
+    return False
+
+
 def get_pdf_page_count(pdf_path: Path) -> int:
     """Return the number of pages in the PDF."""
     with fitz.open(pdf_path) as document:
@@ -28,23 +46,24 @@ def build_search_terms(question: str = "", selected_text: str = "", max_terms: i
 
     if question:
         candidates.append(question[:40])
-        for token in re.split(r"[\s/]+", question):
+        for token in re.split(r"[\s/、，,。．!?！？:：;；()（）\[\]【】]+", question):
             token = normalize_phrase(token)
-            if len(token) >= 2:
+            if len(token) >= 2 and not is_noise_term(token):
                 candidates.append(token[:30])
-
-    if selected_text:
+    elif selected_text:
         fragments = re.split(r"[。．.!?！？\n\r;；:：、，,]+", selected_text)
         fragments = [normalize_phrase(fragment) for fragment in fragments if normalize_phrase(fragment)]
-        fragments = sorted(fragments, key=len, reverse=True)
-        for fragment in fragments[:6]:
-            if 4 <= len(fragment) <= 40:
+        fragments = sorted(fragments, key=len)
+        for fragment in fragments[:4]:
+            if 4 <= len(fragment) <= 40 and not is_noise_term(fragment):
                 candidates.append(fragment)
-            elif len(fragment) > 40:
+            elif len(fragment) > 40 and not is_noise_term(fragment):
                 candidates.append(fragment[:40])
 
         if len(candidates) < max_terms and len(selected_text) >= 8:
-            candidates.append(selected_text[:24])
+            fallback = selected_text[:24]
+            if not is_noise_term(fallback):
+                candidates.append(fallback)
 
     terms: List[str] = []
     seen = set()
