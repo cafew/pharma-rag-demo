@@ -1,3 +1,8 @@
+"""V3 change summary:
+- Improve question-term splitting for Japanese keyword highlighting.
+- Prefer question-based highlights and fall back to selected text only when needed.
+"""
+
 import re
 from pathlib import Path
 from typing import List, Tuple
@@ -11,6 +16,50 @@ def normalize_phrase(text: str) -> str:
     text = text.replace("\u3000", " ")
     text = re.sub(r"\s+", " ", text)
     return text.strip()
+
+
+def is_noise_term(term: str) -> bool:
+    """Skip terms that are likely to create noisy highlights."""
+    normalized = normalize_phrase(term).lower()
+    if not normalized:
+        return True
+
+    if any(marker in normalized for marker in ("http://", "https://", "www.")):
+        return True
+
+    if "/" in normalized and re.search(r"[a-z]", normalized):
+        return True
+
+    if re.fullmatch(r"[\W_]+", normalized):
+        return True
+
+    return False
+
+
+def split_question_terms(question: str) -> List[str]:
+    """Break a question into smaller searchable phrases."""
+    question = normalize_phrase(question)
+    if not question:
+        return []
+
+    # Remove common question endings so page search targets document phrases.
+    stripped = re.sub(r"[?？]+$", "", question)
+    stripped = re.sub(r"(ですか|ますか|でしょうか|でしたか|ます)$", "", stripped)
+
+    parts = [stripped]
+    separators = ["について", "とは", "では", "には", "は", "を", "が", "に", "で", "と", "も", "や", "へ", "か"]
+
+    for separator in separators:
+        next_parts: List[str] = []
+        for part in parts:
+            next_parts.extend(part.split(separator))
+        parts = next_parts
+
+    return [
+        normalize_phrase(part)
+        for part in parts
+        if len(normalize_phrase(part)) >= 2 and not is_noise_term(part)
+    ]
 
 
 def get_pdf_page_count(pdf_path: Path) -> int:
@@ -28,23 +77,26 @@ def build_search_terms(question: str = "", selected_text: str = "", max_terms: i
 
     if question:
         candidates.append(question[:40])
-        for token in re.split(r"[\s/]+", question):
+        # Expand the full question into smaller phrases to improve PDF matches.
+        candidates.extend(split_question_terms(question))
+        for token in re.split(r"[\s/、，,。．!?！？:：;；()（）\[\]【】]+", question):
             token = normalize_phrase(token)
-            if len(token) >= 2:
+            if len(token) >= 2 and not is_noise_term(token):
                 candidates.append(token[:30])
-
-    if selected_text:
+    elif selected_text:
         fragments = re.split(r"[。．.!?！？\n\r;；:：、，,]+", selected_text)
         fragments = [normalize_phrase(fragment) for fragment in fragments if normalize_phrase(fragment)]
-        fragments = sorted(fragments, key=len, reverse=True)
-        for fragment in fragments[:6]:
-            if 4 <= len(fragment) <= 40:
+        fragments = sorted(fragments, key=len)
+        for fragment in fragments[:4]:
+            if 4 <= len(fragment) <= 40 and not is_noise_term(fragment):
                 candidates.append(fragment)
-            elif len(fragment) > 40:
+            elif len(fragment) > 40 and not is_noise_term(fragment):
                 candidates.append(fragment[:40])
 
         if len(candidates) < max_terms and len(selected_text) >= 8:
-            candidates.append(selected_text[:24])
+            fallback = selected_text[:24]
+            if not is_noise_term(fallback):
+                candidates.append(fallback)
 
     terms: List[str] = []
     seen = set()
@@ -96,7 +148,8 @@ def render_annotated_page(
         image = Image.frombytes("RGB", [pixmap.width, pixmap.height], pixmap.samples).convert("RGBA")
         draw = ImageDraw.Draw(image, "RGBA")
 
-        terms = build_search_terms(question=question, selected_text=selected_text)
+        # Prefer question-derived terms first so highlights stay aligned with the user's ask.
+        terms = build_search_terms(question=question, selected_text="")
         rects: List[fitz.Rect] = []
 
         for term in terms:
@@ -104,6 +157,15 @@ def render_annotated_page(
                 rects.extend(page.search_for(term))
             except Exception:
                 continue
+
+        if not rects and selected_text:
+            # Fall back to the retrieved chunk only when the original question finds nothing.
+            terms = build_search_terms(question="", selected_text=selected_text)
+            for term in terms:
+                try:
+                    rects.extend(page.search_for(term))
+                except Exception:
+                    continue
 
         rects = deduplicate_rects(rects)
         scale_x = image.width / page.rect.width
