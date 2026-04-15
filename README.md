@@ -105,7 +105,7 @@ streamlit run app.py
 1. 进入项目目录并激活虚拟环境
 
 ```bash
-cd /Users/ki/01.work/10.Project/pharma-rag-demo
+cd ./pharma-rag-demo
 source .venv/bin/activate
 ```
 
